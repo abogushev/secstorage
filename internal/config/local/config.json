@@ -1,0 +1,6 @@
+{
+  "dburl": "postgres://user:password@localhost:5432/secstorage?sslmode=disable",
+  "key": "7+P+BBqjUvY6NF0jGU9JVWurFULGLbDWPWBRVK6MCpvCHkU1aPAA/gm4t0xKTNGxbQdJvUXMa89rGQCur1z5rw==",
+  "use_sec_creds": true,
+  "port": 3200
+}
