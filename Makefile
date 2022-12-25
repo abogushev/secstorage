@@ -3,7 +3,10 @@ server_up:
 	go run cmd/server/main.go -config internal/config/local/config.json
 
 env_up:
-	docker-compose up
+	docker-compose up -d
+
+env_down:
+	docker-compose down
 
 proto_gen:
 	protoc --go_out=. --go_opt=paths=source_relative \
