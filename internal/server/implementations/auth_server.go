@@ -1,4 +1,4 @@
-package auth
+package implementations
 
 import (
 	"context"
@@ -10,26 +10,28 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	pb "secstorage/internal/api/proto"
 	. "secstorage/internal/logger"
-	"secstorage/internal/storage/auth/model"
+	"secstorage/internal/server/reservederrors"
+	"secstorage/internal/server/services"
+	"secstorage/internal/server/storage/auth/model"
 	"time"
 )
 
-type Service interface {
+type AuthService interface {
 	Register(ctx context.Context, info model.User) (uuid.UUID, error)
 	Login(ctx context.Context, info model.User) (uuid.UUID, error)
 }
 
-type Server struct {
+type AuthServer struct {
 	pb.UnimplementedAuthServer
-	authService  Service
-	tokenService *TokenService
+	authService  AuthService
+	tokenService *services.TokenService
 }
 
-func NewServer(authService Service, tokenService *TokenService) *Server {
-	return &Server{authService: authService, tokenService: tokenService}
+func NewAuthServer(authService AuthService, tokenService *services.TokenService) *AuthServer {
+	return &AuthServer{authService: authService, tokenService: tokenService}
 }
 
-func (s *Server) Register(ctx context.Context, authData *pb.AuthData) (*pb.TokenData, error) {
+func (s *AuthServer) Register(ctx context.Context, authData *pb.AuthData) (*pb.TokenData, error) {
 	if err := validateAuthData(authData); err != nil {
 		return nil, err
 	}
@@ -40,13 +42,13 @@ func (s *Server) Register(ctx context.Context, authData *pb.AuthData) (*pb.Token
 	if err == nil {
 		return s.genToken(id)
 	}
-	if errors.Is(err, model.ErrUserAlreadyExist) {
+	if errors.Is(err, reservederrors.ErrUserAlreadyExist) {
 		return nil, status.Error(codes.AlreadyExists, err.Error())
 	}
 	return nil, status.Error(codes.Internal, "internal error")
 }
 
-func (s *Server) Login(ctx context.Context, authData *pb.AuthData) (*pb.TokenData, error) {
+func (s *AuthServer) Login(ctx context.Context, authData *pb.AuthData) (*pb.TokenData, error) {
 	if err := validateAuthData(authData); err != nil {
 		return nil, err
 	}
@@ -55,7 +57,7 @@ func (s *Server) Login(ctx context.Context, authData *pb.AuthData) (*pb.TokenDat
 	if err == nil {
 		return s.genToken(id)
 	}
-	if errors.Is(err, model.ErrUserNotFound) {
+	if errors.Is(err, reservederrors.ErrUserNotFound) {
 		return nil, status.Error(codes.NotFound, err.Error())
 	}
 	return nil, status.Error(codes.Internal, "internal error")
@@ -68,7 +70,7 @@ func validateAuthData(authData *pb.AuthData) error {
 	return nil
 }
 
-func (s *Server) genToken(id uuid.UUID) (*pb.TokenData, error) {
+func (s *AuthServer) genToken(id uuid.UUID) (*pb.TokenData, error) {
 	expireAt := time.Now().UTC().Add(time.Hour)
 	token, err := s.tokenService.Generate(id, expireAt)
 	if err != nil {

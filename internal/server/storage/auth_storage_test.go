@@ -4,7 +4,8 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"secstorage/internal/storage/auth/model"
+	"secstorage/internal/server/reservederrors"
+	"secstorage/internal/server/storage/auth/model"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestRegister_DuplicateException(t *testing.T) {
 	_, err1 := AuthStorage.Register(context.TODO(), model.User{Login: "login", Password: "password"})
 	_, err2 := AuthStorage.Register(context.TODO(), model.User{Login: "login", Password: "password"})
 	assert.NoError(t, err1)
-	assert.ErrorIs(t, err2, model.ErrUserAlreadyExist)
+	assert.ErrorIs(t, err2, reservederrors.ErrUserAlreadyExist)
 }
 
 func TestLogin_Success(t *testing.T) {
@@ -42,5 +43,5 @@ func TestLogin_UserNotFoundException(t *testing.T) {
 	prepare()
 	user := model.User{Id: uuid.New(), Login: "login", Password: "password"}
 	_, err := AuthStorage.Login(context.TODO(), user)
-	assert.ErrorIs(t, err, model.ErrUserNotFound)
+	assert.ErrorIs(t, err, reservederrors.ErrUserNotFound)
 }

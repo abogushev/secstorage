@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"github.com/google/uuid"
-	"secstorage/internal/storage/auth/model"
+	"secstorage/internal/server/storage/auth/model"
 )
 
 type AuthStorage interface {

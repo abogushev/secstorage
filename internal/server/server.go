@@ -8,18 +8,26 @@ import (
 	"net"
 	pb "secstorage/internal/api/proto"
 	. "secstorage/internal/logger"
-	"secstorage/internal/server/auth"
+	"secstorage/internal/server/implementations"
+	"secstorage/internal/server/interceptors"
+	"secstorage/internal/server/services"
 )
 
 func Run(
 	ctx context.Context,
-	authService auth.Service,
-	tokenService *auth.TokenService,
+	authServer *implementations.AuthServer,
+	resourceServer *implementations.ResourceServer,
+	tokenService *services.TokenService,
 	creds credentials.TransportCredentials,
 	listen net.Listener,
 ) {
-	server := grpc.NewServer(grpc.Creds(creds))
-	pb.RegisterAuthServer(server, auth.NewServer(authService, tokenService))
+	server := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.UnaryInterceptor(interceptors.TokenInterceptor(tokenService)),
+		grpc.StreamInterceptor(interceptors.TokenStreamInterceptor(tokenService)),
+	)
+	pb.RegisterAuthServer(server, authServer)
+	pb.RegisterResourcesServer(server, resourceServer)
 	Log.Info("server is up")
 
 	go func() {

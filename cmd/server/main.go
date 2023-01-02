@@ -11,10 +11,12 @@ import (
 	"os"
 	. "secstorage/internal/logger"
 	"secstorage/internal/server"
-	"secstorage/internal/server/auth"
-	authServices "secstorage/internal/server/auth/services"
-	"secstorage/internal/storage"
-	authStorage "secstorage/internal/storage/auth"
+	"secstorage/internal/server/implementations"
+	"secstorage/internal/server/services"
+	"secstorage/internal/server/storage"
+	authStorage "secstorage/internal/server/storage/auth"
+	resourceStorage "secstorage/internal/server/storage/resource"
+
 	"strconv"
 )
 
@@ -22,9 +24,6 @@ func main() {
 	config := mustReadConfig()
 	db := storage.MustInitDB(context.Background(), config.DBURL)
 
-	authStore := authStorage.NewAuthStorage(context.Background(), db)
-	authService := authServices.NewAuthService(authStore)
-	tokenService := auth.NewTokenService(config.Key)
 	var creds credentials.TransportCredentials
 	if config.UseSecCreds {
 		secCreds, err := credentials.NewServerTLSFromFile("cert/service.pem", "cert/service.key")
@@ -41,7 +40,18 @@ func main() {
 		Log.Error("error on listen port", zap.Error(err))
 		return
 	}
-	server.Run(context.Background(), authService, tokenService, creds, listen)
+
+	tokenService := services.NewTokenService(config.Key)
+
+	authStore := authStorage.NewStorage(context.Background(), db)
+	authService := services.NewAuthService(authStore)
+	authServer := implementations.NewAuthServer(authService, tokenService)
+
+	resourceStore := resourceStorage.NewStore(context.Background(), db)
+	resourceService := services.NewResourceStoreService(resourceStore)
+	resourceServer := implementations.NewResourcesServer(resourceService)
+
+	server.Run(context.Background(), authServer, resourceServer, tokenService, creds, listen)
 }
 
 type Config struct {

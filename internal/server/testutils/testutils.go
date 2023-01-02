@@ -18,7 +18,7 @@ func RunWithDBContainer(testRun func(dbUrl string)) {
 
 func SetupTestDatabase() (string, testcontainers.Container) {
 	_, filename, _, _ := runtime.Caller(0)
-	migrationsPath := path.Join(path.Dir(filename), "../../migrations")
+	migrationsPath := path.Join(path.Dir(filename), "../../../migrations")
 
 	containerReq := testcontainers.ContainerRequest{
 		Image:        "postgres:latest",
