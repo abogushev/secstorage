@@ -12,14 +12,18 @@ import (
 	"time"
 )
 
-type AuthService struct {
-	authClient       pb.AuthClient
-	token            *pb.TokenData
-	refreshTokenOnce sync.Once
+type TokenServiceSetter interface {
+	Set(string)
 }
 
-func NewAuthService(cl pb.AuthClient) *AuthService {
-	return &AuthService{authClient: cl}
+type AuthService struct {
+	authClient       pb.AuthClient
+	refreshTokenOnce sync.Once
+	tokenService     TokenServiceSetter
+}
+
+func NewAuthService(cl pb.AuthClient, tokenService TokenServiceSetter) *AuthService {
+	return &AuthService{authClient: cl, tokenService: tokenService}
 }
 
 func (s *AuthService) Register(ctx context.Context, login, password string) (*pb.TokenData, error) {
@@ -35,7 +39,7 @@ func (s *AuthService) Register(ctx context.Context, login, password string) (*pb
 		Log.Error("register failed", zap.Error(err))
 		return nil, err
 	}
-	s.token = tokenData
+	s.tokenService.Set(tokenData.Token)
 
 	go s.refreshToken(login, password)
 
@@ -56,7 +60,7 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (*pb.To
 		return nil, err
 	}
 
-	s.token = tokenData
+	s.tokenService.Set(tokenData.Token)
 
 	go s.refreshToken(login, password)
 
@@ -77,7 +81,7 @@ func (s *AuthService) refreshToken(login, password string) {
 				if err != nil {
 					Log.Error("failed to refresh token", zap.Error(err))
 				} else {
-					s.token = token
+					s.tokenService.Set(token.Token)
 					Log.Info("token refreshed successful")
 				}
 			}

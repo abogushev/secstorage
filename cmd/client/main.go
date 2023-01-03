@@ -13,6 +13,7 @@ import (
 	"os"
 	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
+	"secstorage/internal/client/interceptors"
 	"secstorage/internal/client/model"
 	"secstorage/internal/client/services"
 	. "secstorage/internal/logger"
@@ -23,13 +24,19 @@ import (
 var authService *services.AuthService
 var resourceService *services.ResourceService
 var scanner = makeScanner()
+var tokenService = &services.TokenService{}
 
 func main() {
 	creds, err := credentials.NewClientTLSFromFile("cert/service.pem", "")
 	if err != nil {
 		Log.Fatal("could not process the credentials: %v", zap.Error(err))
 	}
-	con, err := grpc.Dial(":3200", grpc.WithTransportCredentials(creds))
+	con, err := grpc.Dial(
+		":3200",
+		grpc.WithTransportCredentials(creds),
+		grpc.WithUnaryInterceptor(interceptors.TokenUnaryInterceptor(tokenService)),
+		grpc.WithStreamInterceptor(interceptors.TokenStreamInterceptor(tokenService)),
+	)
 	if err != nil {
 		Log.Fatal("create connection failed", zap.Error(err))
 	}
@@ -41,7 +48,7 @@ func main() {
 		}
 	}(con)
 
-	authService = services.NewAuthService(pb.NewAuthClient(con))
+	authService = services.NewAuthService(pb.NewAuthClient(con), tokenService)
 	resourceService = services.NewResourceService(pb.NewResourcesClient(con))
 
 	loop(loginRegisterInitMsg, initAuth)
