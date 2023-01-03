@@ -12,5 +12,5 @@ func NewLoginPassword(login string, password string) *LoginPassword {
 }
 
 func (p *LoginPassword) Print(description string) string {
-	return fmt.Sprintf("login:%v\npassword:%v\ndescription:%v", p.Login, p.Password, description)
+	return fmt.Sprintf("\nlogin:%v\npassword:%v\ndescription:%v", p.Login, p.Password, description)
 }

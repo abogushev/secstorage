@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/term"
 	"google.golang.org/grpc"
@@ -17,6 +18,7 @@ import (
 	"secstorage/internal/client/model"
 	"secstorage/internal/client/services"
 	. "secstorage/internal/logger"
+	"strconv"
 	"strings"
 	"syscall"
 )
@@ -123,6 +125,15 @@ func processUI(input string) (string, error) {
 	switch cmd {
 	case "save":
 		return handleSave(args)
+
+	case "del":
+		return handleDelete(args)
+
+	case "list":
+		return handleList(args)
+
+	case "get":
+		return handleGet(args)
 	}
 	return "", errors.New("bad args")
 }
@@ -130,7 +141,56 @@ func processUI(input string) (string, error) {
 var saveInitMsg = `
 save lp - save login password
 save bc - save bank card
+del [id] - delete by id
+list [type:1,2,3] - 1 - LoginPassword, 2 - File, 3 - BankCard 
+get [id] - get data by id
 `
+
+func handleGet(args []string) (string, error) {
+	id, err := uuid.Parse(args[0])
+	if err != nil {
+		return "", err
+	}
+	data, meta, err := resourceService.Get(context.Background(), id)
+	if err != nil {
+		return "", err
+	}
+
+	return data.Print(string(meta)), nil
+}
+
+func handleList(args []string) (string, error) {
+	t, err := strconv.Atoi(args[0])
+	if err != nil {
+		return "", err
+	}
+	rtype := api.ResourceType(t)
+
+	shortInfos, err := resourceService.ListByUserId(context.Background(), rtype)
+	if err != nil {
+		return "", err
+	}
+	var writer strings.Builder
+	for i := 0; i < len(shortInfos); i++ {
+		_, err := writer.WriteString(fmt.Sprintf("id: %v - %v", shortInfos[i].Id, shortInfos[i].Meta))
+		if err != nil {
+			return "", err
+		}
+	}
+	return writer.String(), nil
+}
+
+func handleDelete(args []string) (string, error) {
+	id, err := uuid.Parse(args[0])
+	if err != nil {
+		return "", err
+	}
+	err = resourceService.Delete(context.Background(), id)
+	if err != nil {
+		return "", err
+	}
+	return "deleted", nil
+}
 
 func handleSave(args []string) (string, error) {
 	if args[0] != "lp" && args[0] != "bc" {

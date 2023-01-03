@@ -63,25 +63,26 @@ func (s *ResourceService) ListByUserId(ctx context.Context, rType api.ResourceTy
 	return results, nil
 }
 
-func (s *ResourceService) Get(ctx context.Context, id api.ResourceId) (model.Resource, error) {
+func (s *ResourceService) Get(ctx context.Context, id api.ResourceId) (model.Resource, []byte, error) {
 	resource, err := s.resourceClient.Get(ctx, &pb.UUID{Value: id[:]})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	switch api.ResourceType(resource.Type) {
 	case api.LoginPassword:
 		var lp model.LoginPassword
 		if err := json.Unmarshal(resource.Data, &lp); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return &lp, nil
+
+		return &lp, resource.Meta, nil
 
 	case api.BankCard:
 		var bc model.BankCard
 		if err := json.Unmarshal(resource.Data, &bc); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return &bc, nil
+		return &bc, resource.Meta, nil
 	}
-	return nil, fmt.Errorf("undefined type %v", resource.Type)
+	return nil, nil, fmt.Errorf("undefined type %v", resource.Type)
 }
