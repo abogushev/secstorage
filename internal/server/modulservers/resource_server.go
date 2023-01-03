@@ -1,18 +1,19 @@
-package implementations
+package modulservers
 
 import (
 	"context"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
 	"secstorage/internal/server/storage/resource/model"
 )
 
 type ResourceService interface {
-	Save(context.Context, *model.Resource) (model.ResourceId, error)
-	Delete(context.Context, model.ResourceId) error
-	ListByUserId(context.Context, model.UserId, model.ResourceType) ([]model.ShortResourceInfo, error)
-	Get(context.Context, model.ResourceId) (*model.Resource, error)
+	Save(context.Context, *model.Resource) (api.ResourceId, error)
+	Delete(context.Context, api.ResourceId) error
+	ListByUserId(context.Context, api.UserId, api.ResourceType) ([]model.ShortResourceInfo, error)
+	Get(context.Context, api.ResourceId) (*model.Resource, error)
 }
 
 type ResourceServer struct {
@@ -29,7 +30,7 @@ func NewResourcesServer(service ResourceService) *ResourceServer {
 func (s *ResourceServer) Save(ctx context.Context, resource *pb.Resource) (*pb.UUID, error) {
 	id, err := s.service.Save(ctx, &model.Resource{
 		UserId: extractUserId(ctx),
-		Type:   model.ResourceType(resource.Type),
+		Type:   api.ResourceType(resource.Type),
 		Data:   resource.Data,
 		Meta:   resource.Meta,
 	})
@@ -48,7 +49,7 @@ func (s *ResourceServer) Delete(ctx context.Context, id *pb.UUID) (*emptypb.Empt
 }
 
 func (s *ResourceServer) ListByUserId(query *pb.Query, stream pb.Resources_ListByUserIdServer) error {
-	t := model.ResourceType(query.ResourceType)
+	t := api.ResourceType(query.ResourceType)
 	userId := extractUserId(stream.Context())
 	list, err := s.service.ListByUserId(stream.Context(), userId, t)
 	if err != nil {

@@ -6,8 +6,8 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
+	"secstorage/internal/api"
 	"secstorage/internal/server/reservederrors"
-	"secstorage/internal/server/storage/resource/model"
 	"time"
 )
 
@@ -16,7 +16,7 @@ type TokenService struct {
 }
 
 type authClaims struct {
-	Id model.UserId `json:"id"`
+	Id api.UserId `json:"id"`
 	jwt.RegisteredClaims
 }
 
@@ -33,7 +33,7 @@ func (s *TokenService) Generate(id uuid.UUID, expireAt time.Time) (string, error
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(s.key))
 }
 
-func (s *TokenService) Extract(tokenStr string) (model.UserId, error) {
+func (s *TokenService) Extract(tokenStr string) (api.UserId, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &authClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(s.key), nil
 	})
@@ -44,7 +44,7 @@ func (s *TokenService) Extract(tokenStr string) (model.UserId, error) {
 	return uuid.Nil, err
 }
 
-func (s *TokenService) GetUserIdGRPC(ctx context.Context) (model.UserId, error) {
+func (s *TokenService) GetUserIdGRPC(ctx context.Context) (api.UserId, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return uuid.Nil, errors.New("can't read md")

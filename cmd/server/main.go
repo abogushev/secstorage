@@ -11,7 +11,7 @@ import (
 	"os"
 	. "secstorage/internal/logger"
 	"secstorage/internal/server"
-	"secstorage/internal/server/implementations"
+	"secstorage/internal/server/modulservers"
 	"secstorage/internal/server/services"
 	"secstorage/internal/server/storage"
 	authStorage "secstorage/internal/server/storage/auth"
@@ -45,11 +45,11 @@ func main() {
 
 	authStore := authStorage.NewStorage(context.Background(), db)
 	authService := services.NewAuthService(authStore)
-	authServer := implementations.NewAuthServer(authService, tokenService)
+	authServer := modulservers.NewAuthServer(authService, tokenService)
 
 	resourceStore := resourceStorage.NewStore(context.Background(), db)
 	resourceService := services.NewResourceStoreService(resourceStore)
-	resourceServer := implementations.NewResourcesServer(resourceService)
+	resourceServer := modulservers.NewResourcesServer(resourceService)
 
 	server.Run(context.Background(), authServer, resourceServer, tokenService, creds, listen)
 }

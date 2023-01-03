@@ -8,15 +8,15 @@ import (
 	"net"
 	pb "secstorage/internal/api/proto"
 	. "secstorage/internal/logger"
-	"secstorage/internal/server/implementations"
 	"secstorage/internal/server/interceptors"
+	"secstorage/internal/server/modulservers"
 	"secstorage/internal/server/services"
 )
 
 func Run(
 	ctx context.Context,
-	authServer *implementations.AuthServer,
-	resourceServer *implementations.ResourceServer,
+	authServer *modulservers.AuthServer,
+	resourceServer *modulservers.ResourceServer,
 	tokenService *services.TokenService,
 	creds credentials.TransportCredentials,
 	listen net.Listener,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"secstorage/internal/api"
 	"secstorage/internal/server/reservederrors"
 	"secstorage/internal/server/storage"
 	"secstorage/internal/server/storage/resource/model"
@@ -18,8 +19,8 @@ func NewStore(ctx context.Context, db *sqlx.DB) *Storage {
 	return &Storage{ctx: ctx, db: db}
 }
 
-func (s *Storage) Save(ctx context.Context, resource *model.Resource) (model.ResourceId, error) {
-	var id model.ResourceId
+func (s *Storage) Save(ctx context.Context, resource *model.Resource) (api.ResourceId, error) {
+	var id api.ResourceId
 
 	err := s.db.QueryRowContext(
 		ctx,
@@ -37,12 +38,12 @@ func (s *Storage) Save(ctx context.Context, resource *model.Resource) (model.Res
 	return id, err
 }
 
-func (s *Storage) Delete(ctx context.Context, resourceId model.ResourceId) error {
+func (s *Storage) Delete(ctx context.Context, resourceId api.ResourceId) error {
 	_, err := s.db.ExecContext(ctx, "delete from resources where id = $1", resourceId)
 	return err
 }
 
-func (s *Storage) ListByUserId(ctx context.Context, userId model.UserId, resourceType model.ResourceType) ([]model.ShortResourceInfo, error) {
+func (s *Storage) ListByUserId(ctx context.Context, userId api.UserId, resourceType api.ResourceType) ([]model.ShortResourceInfo, error) {
 	var results []model.ShortResourceInfo
 	err := s.db.SelectContext(
 		ctx,
@@ -54,7 +55,7 @@ func (s *Storage) ListByUserId(ctx context.Context, userId model.UserId, resourc
 	return results, err
 }
 
-func (s *Storage) Get(ctx context.Context, resourceId model.ResourceId) (*model.Resource, error) {
+func (s *Storage) Get(ctx context.Context, resourceId api.ResourceId) (*model.Resource, error) {
 	var result model.Resource
 	err := s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1", resourceId)
 	return &result, err

@@ -15,13 +15,13 @@ import (
 	"log"
 	"net"
 	"os"
+	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
-	"secstorage/internal/server/implementations"
+	"secstorage/internal/server/modulservers"
 	services "secstorage/internal/server/services"
 	"secstorage/internal/server/storage"
 	authStorage "secstorage/internal/server/storage/auth"
 	resourceStorage "secstorage/internal/server/storage/resource"
-	"secstorage/internal/server/storage/resource/model"
 	"secstorage/internal/server/testutils"
 	"testing"
 )
@@ -43,11 +43,11 @@ func initServerAndClient(db *sqlx.DB) {
 
 	authStore := authStorage.NewStorage(context.Background(), db)
 	authService := services.NewAuthService(authStore)
-	authServer := implementations.NewAuthServer(authService, TokenService)
+	authServer := modulservers.NewAuthServer(authService, TokenService)
 
 	resourceStore := resourceStorage.NewStore(context.Background(), db)
 	resourceService := services.NewResourceStoreService(resourceStore)
-	resourceServer := implementations.NewResourcesServer(resourceService)
+	resourceServer := modulservers.NewResourcesServer(resourceService)
 
 	go Run(context.Background(), authServer, resourceServer, TokenService, insecure.NewCredentials(), lis)
 
@@ -154,7 +154,7 @@ func TestResourceServer_List_And_Delete_Success(t *testing.T) {
 	userId, err := TokenService.Extract(token.Token)
 	assert.NoError(t, err)
 
-	var rId1 model.ResourceId
+	var rId1 api.ResourceId
 	err = db.QueryRowContext(
 		context.Background(),
 		"insert into resources(id, user_id, type, data, meta) values (gen_random_uuid(), $1,$2,$3,$4) returning id",
@@ -164,7 +164,7 @@ func TestResourceServer_List_And_Delete_Success(t *testing.T) {
 		testResource.Meta,
 	).Scan(&rId1)
 	assert.NoError(t, err)
-	var rId2 model.ResourceId
+	var rId2 api.ResourceId
 	err = db.QueryRowContext(
 		context.Background(),
 		"insert into resources(id, user_id, type, data, meta) values (gen_random_uuid(), $1,$2,$3,$4) returning id",
@@ -178,7 +178,7 @@ func TestResourceServer_List_And_Delete_Success(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.New(map[string]string{"token": token.Token}))
 	stream, err := resourceClient.ListByUserId(ctx, &pb.Query{ResourceType: testResource.Type})
 
-	expecteds := map[model.ResourceId]*pb.Resource{rId1: testResource, rId2: testResource}
+	expecteds := map[api.ResourceId]*pb.Resource{rId1: testResource, rId2: testResource}
 	result := make([]*pb.ShortResourceInfo, 0, 2)
 
 	for {

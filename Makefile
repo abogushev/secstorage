@@ -1,6 +1,6 @@
 
 server_up:
-	go run cmd/server/main.go -config internal/config/local/config.json
+	go run cmd/server/main.go -config internal/server/config/local/config.json
 
 env_up:
 	docker-compose up -d
