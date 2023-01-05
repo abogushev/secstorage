@@ -11,10 +11,10 @@ import (
 
 type ResourceStore interface {
 	Save(context.Context, *model.Resource) error
-	Delete(context.Context, api.ResourceId) error
-	DeleteTx(context.Context, api.ResourceId, func() error) error
+	Delete(context.Context, api.ResourceId, api.UserId) error
+	DeleteTx(context.Context, api.ResourceId, api.UserId, func() error) error
 	ListByUserId(context.Context, api.UserId, api.ResourceType) ([]model.ShortResourceInfo, error)
-	Get(context.Context, api.ResourceId, api.ResourceType) (*model.Resource, error)
+	Get(context.Context, api.ResourceId, api.ResourceType, api.UserId) (*model.Resource, error)
 }
 
 type ResourceService struct {
@@ -30,25 +30,25 @@ func (s *ResourceService) Save(ctx context.Context, data *model.Resource) error 
 	return s.store.Save(ctx, data)
 }
 
-func (s *ResourceService) Delete(ctx context.Context, id api.ResourceId) error {
-	resource, err := s.store.Get(ctx, id, api.Undefined)
+func (s *ResourceService) Delete(ctx context.Context, id api.ResourceId, userId api.UserId) error {
+	resource, err := s.store.Get(ctx, id, api.Undefined, userId)
 	if err != nil {
 		return err
 	}
 	if resource.Type == api.File {
-		return s.store.DeleteTx(ctx, id, func() error {
+		return s.store.DeleteTx(ctx, id, userId, func() error {
 			return os.Remove(string(resource.Data))
 		})
 	}
-	return s.store.Delete(ctx, id)
+	return s.store.Delete(ctx, id, userId)
 }
 
 func (s *ResourceService) ListByUserId(ctx context.Context, userId api.UserId, resourceType api.ResourceType) ([]model.ShortResourceInfo, error) {
 	return s.store.ListByUserId(ctx, userId, resourceType)
 }
 
-func (s *ResourceService) Get(ctx context.Context, resourceId api.ResourceId) (*model.Resource, error) {
-	return s.store.Get(ctx, resourceId, api.Undefined)
+func (s *ResourceService) Get(ctx context.Context, resourceId api.ResourceId, userId api.UserId) (*model.Resource, error) {
+	return s.store.Get(ctx, resourceId, api.Undefined, userId)
 }
 
 type Close func()
@@ -81,8 +81,8 @@ func (s *ResourceService) SaveFile(ctx context.Context, userId api.UserId, meta 
 	return id, writer, func() { writer.Flush(); file.Close() }, nil
 }
 
-func (s *ResourceService) GetFile(ctx context.Context, id api.ResourceId) (*bufio.Reader, []byte, Close, error) {
-	resource, err := s.store.Get(ctx, id, api.File)
+func (s *ResourceService) GetFile(ctx context.Context, id api.ResourceId, userId api.UserId) (*bufio.Reader, []byte, Close, error) {
+	resource, err := s.store.Get(ctx, id, api.File, userId)
 	if err != nil {
 		return nil, nil, nil, err
 	}

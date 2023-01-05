@@ -36,8 +36,8 @@ func (s *Storage) Save(ctx context.Context, resource *model.Resource) error {
 	return err
 }
 
-func (s *Storage) Delete(ctx context.Context, resourceId api.ResourceId) error {
-	_, err := s.db.ExecContext(ctx, "delete from resources where id = $1", resourceId)
+func (s *Storage) Delete(ctx context.Context, resourceId api.ResourceId, userId api.UserId) error {
+	_, err := s.db.ExecContext(ctx, "delete from resources where id = $1 and user_id = $2", resourceId, userId)
 	return err
 }
 
@@ -53,24 +53,24 @@ func (s *Storage) ListByUserId(ctx context.Context, userId api.UserId, resourceT
 	return results, err
 }
 
-func (s *Storage) Get(ctx context.Context, resourceId api.ResourceId, resourceType api.ResourceType) (*model.Resource, error) {
+func (s *Storage) Get(ctx context.Context, resourceId api.ResourceId, resourceType api.ResourceType, userId api.UserId) (*model.Resource, error) {
 	var result model.Resource
 	var err error
 	if resourceType == 0 {
-		err = s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1", resourceId)
+		err = s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1 and user_id = $2", resourceId, userId)
 	} else {
-		err = s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1 and type = $2", resourceId, resourceType)
+		err = s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1 and type = $2 and user_id = $3", resourceId, resourceType, userId)
 	}
 	return &result, err
 }
 
-func (s *Storage) DeleteTx(ctx context.Context, id api.ResourceId, call func() error) error {
+func (s *Storage) DeleteTx(ctx context.Context, id api.ResourceId, userId api.UserId, call func() error) error {
 	return storage.RunInTx(
 		func(tx *sqlx.Tx) error {
 			return call()
 		},
 		func(tx *sqlx.Tx) error {
-			_, err := tx.ExecContext(ctx, "delete from resources where id = $1", id)
+			_, err := tx.ExecContext(ctx, "delete from resources where id = $1 and user_id = $2", id, userId)
 			return err
 		},
 	)

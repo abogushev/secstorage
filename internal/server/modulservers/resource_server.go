@@ -14,11 +14,11 @@ import (
 
 type ResourceService interface {
 	Save(context.Context, *model.Resource) error
-	Delete(context.Context, api.ResourceId) error
+	Delete(context.Context, api.ResourceId, api.UserId) error
 	ListByUserId(context.Context, api.UserId, api.ResourceType) ([]model.ShortResourceInfo, error)
-	Get(context.Context, api.ResourceId) (*model.Resource, error)
-	SaveFile(ctx context.Context, userId api.UserId, meta []byte) (api.ResourceId, *bufio.Writer, services.Close, error)
-	GetFile(ctx context.Context, id api.ResourceId) (*bufio.Reader, []byte, services.Close, error)
+	Get(context.Context, api.ResourceId, api.UserId) (*model.Resource, error)
+	SaveFile(context.Context, api.UserId, []byte) (api.ResourceId, *bufio.Writer, services.Close, error)
+	GetFile(context.Context, api.ResourceId, api.UserId) (*bufio.Reader, []byte, services.Close, error)
 }
 
 type ResourceServer struct {
@@ -49,7 +49,7 @@ func (s *ResourceServer) Delete(ctx context.Context, id *pb.UUID) (*emptypb.Empt
 	if err != nil {
 		return nil, err
 	}
-	if err := s.service.Delete(ctx, rId); err != nil {
+	if err := s.service.Delete(ctx, rId, extractUserId(ctx)); err != nil {
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
@@ -81,7 +81,7 @@ func (s *ResourceServer) Get(ctx context.Context, id *pb.UUID) (*pb.Resource, er
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.service.Get(ctx, rId)
+	result, err := s.service.Get(ctx, rId, extractUserId(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (s *ResourceServer) GetFile(id *pb.UUID, stream pb.Resources_GetFileServer)
 	if err != nil {
 		return err
 	}
-	reader, meta, closeReader, err := s.service.GetFile(stream.Context(), rId)
+	reader, meta, closeReader, err := s.service.GetFile(stream.Context(), rId, extractUserId(stream.Context()))
 	if err != nil {
 		return err
 	}
