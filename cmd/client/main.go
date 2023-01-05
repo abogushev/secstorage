@@ -23,6 +23,11 @@ import (
 	"syscall"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+)
+
 var authService *services.AuthService
 var resourceService *services.ResourceService
 var scanner = makeScanner()
@@ -53,7 +58,7 @@ func main() {
 	authService = services.NewAuthService(pb.NewAuthClient(con), tokenService)
 	resourceService = services.NewResourceService(pb.NewResourcesClient(con), os.TempDir())
 
-	loop(loginRegisterInitMsg, initAuth)
+	startLoop(loginRegisterInitMsg, initAuth)
 	infinityLoop(saveInitMsg, processUI)
 }
 
@@ -86,8 +91,8 @@ func initAuth(input string) error {
 	return errors.New("bad args")
 }
 
-func loop(initMsg string, handler func(string) error) {
-	clear(initMsg)
+func startLoop(initMsg string, handler func(string) error) {
+	clear(fmt.Sprintf("%v\n%v", printBuildInfo(buildVersion, buildDate), initMsg))
 	for {
 		cmd := readString("")
 		err := handler(cmd)
@@ -296,4 +301,15 @@ func readString(label string) string {
 	fmt.Print("-> ")
 	scanner.Scan()
 	return scanner.Text()
+}
+
+func strOrNA(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "N/A"
+	}
+	return s
+}
+
+func printBuildInfo(buildVersion string, buildDate string) string {
+	return fmt.Sprintf("buildVersion=%s buildDate=%s", strOrNA(buildVersion), strOrNA(buildDate))
 }
