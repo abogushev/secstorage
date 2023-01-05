@@ -27,6 +27,8 @@ type ResourcesClient interface {
 	Delete(ctx context.Context, in *UUID, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ListByUserId(ctx context.Context, in *Query, opts ...grpc.CallOption) (Resources_ListByUserIdClient, error)
 	Get(ctx context.Context, in *UUID, opts ...grpc.CallOption) (*Resource, error)
+	SaveFile(ctx context.Context, opts ...grpc.CallOption) (Resources_SaveFileClient, error)
+	GetFile(ctx context.Context, in *UUID, opts ...grpc.CallOption) (Resources_GetFileClient, error)
 }
 
 type resourcesClient struct {
@@ -96,6 +98,72 @@ func (c *resourcesClient) Get(ctx context.Context, in *UUID, opts ...grpc.CallOp
 	return out, nil
 }
 
+func (c *resourcesClient) SaveFile(ctx context.Context, opts ...grpc.CallOption) (Resources_SaveFileClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Resources_ServiceDesc.Streams[1], "/secstorage.Resources/SaveFile", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &resourcesSaveFileClient{stream}
+	return x, nil
+}
+
+type Resources_SaveFileClient interface {
+	Send(*FileChunk) error
+	CloseAndRecv() (*UUID, error)
+	grpc.ClientStream
+}
+
+type resourcesSaveFileClient struct {
+	grpc.ClientStream
+}
+
+func (x *resourcesSaveFileClient) Send(m *FileChunk) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *resourcesSaveFileClient) CloseAndRecv() (*UUID, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(UUID)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *resourcesClient) GetFile(ctx context.Context, in *UUID, opts ...grpc.CallOption) (Resources_GetFileClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Resources_ServiceDesc.Streams[2], "/secstorage.Resources/GetFile", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &resourcesGetFileClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Resources_GetFileClient interface {
+	Recv() (*FileChunk, error)
+	grpc.ClientStream
+}
+
+type resourcesGetFileClient struct {
+	grpc.ClientStream
+}
+
+func (x *resourcesGetFileClient) Recv() (*FileChunk, error) {
+	m := new(FileChunk)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ResourcesServer is the server API for Resources service.
 // All implementations must embed UnimplementedResourcesServer
 // for forward compatibility
@@ -104,6 +172,8 @@ type ResourcesServer interface {
 	Delete(context.Context, *UUID) (*emptypb.Empty, error)
 	ListByUserId(*Query, Resources_ListByUserIdServer) error
 	Get(context.Context, *UUID) (*Resource, error)
+	SaveFile(Resources_SaveFileServer) error
+	GetFile(*UUID, Resources_GetFileServer) error
 	mustEmbedUnimplementedResourcesServer()
 }
 
@@ -122,6 +192,12 @@ func (UnimplementedResourcesServer) ListByUserId(*Query, Resources_ListByUserIdS
 }
 func (UnimplementedResourcesServer) Get(context.Context, *UUID) (*Resource, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
+}
+func (UnimplementedResourcesServer) SaveFile(Resources_SaveFileServer) error {
+	return status.Errorf(codes.Unimplemented, "method SaveFile not implemented")
+}
+func (UnimplementedResourcesServer) GetFile(*UUID, Resources_GetFileServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetFile not implemented")
 }
 func (UnimplementedResourcesServer) mustEmbedUnimplementedResourcesServer() {}
 
@@ -211,6 +287,53 @@ func _Resources_Get_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Resources_SaveFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ResourcesServer).SaveFile(&resourcesSaveFileServer{stream})
+}
+
+type Resources_SaveFileServer interface {
+	SendAndClose(*UUID) error
+	Recv() (*FileChunk, error)
+	grpc.ServerStream
+}
+
+type resourcesSaveFileServer struct {
+	grpc.ServerStream
+}
+
+func (x *resourcesSaveFileServer) SendAndClose(m *UUID) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *resourcesSaveFileServer) Recv() (*FileChunk, error) {
+	m := new(FileChunk)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _Resources_GetFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(UUID)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ResourcesServer).GetFile(m, &resourcesGetFileServer{stream})
+}
+
+type Resources_GetFileServer interface {
+	Send(*FileChunk) error
+	grpc.ServerStream
+}
+
+type resourcesGetFileServer struct {
+	grpc.ServerStream
+}
+
+func (x *resourcesGetFileServer) Send(m *FileChunk) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Resources_ServiceDesc is the grpc.ServiceDesc for Resources service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -235,6 +358,16 @@ var Resources_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ListByUserId",
 			Handler:       _Resources_ListByUserId_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "SaveFile",
+			Handler:       _Resources_SaveFile_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetFile",
+			Handler:       _Resources_GetFile_Handler,
 			ServerStreams: true,
 		},
 	},

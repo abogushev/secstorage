@@ -1,11 +1,13 @@
 package services
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"io"
+	"os"
 	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
 	"secstorage/internal/client/model"
@@ -13,10 +15,11 @@ import (
 
 type ResourceService struct {
 	resourceClient pb.ResourcesClient
+	fileStorePath  string
 }
 
-func NewResourceService(cl pb.ResourcesClient) *ResourceService {
-	return &ResourceService{resourceClient: cl}
+func NewResourceService(cl pb.ResourcesClient, fileStorePath string) *ResourceService {
+	return &ResourceService{resourceClient: cl, fileStorePath: fileStorePath}
 }
 
 func (s *ResourceService) Save(ctx context.Context, dType api.ResourceType, data []byte, meta []byte) (api.ResourceId, error) {
@@ -85,4 +88,81 @@ func (s *ResourceService) Get(ctx context.Context, id api.ResourceId) (model.Res
 		return &bc, resource.Meta, nil
 	}
 	return nil, nil, fmt.Errorf("undefined type %v", resource.Type)
+}
+
+func (s *ResourceService) SaveFile(ctx context.Context, description, path string) (api.ResourceId, error) {
+	stream, err := s.resourceClient.SaveFile(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	defer file.Close()
+	reader := bufio.NewReader(file)
+	data := make([]byte, 4096)
+	n := 0
+
+	err = stream.Send(&pb.FileChunk{
+		Meta: []byte(description),
+		Data: nil,
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	for {
+		n, err = reader.Read(data)
+		if err == io.EOF || n == 0 {
+			break
+		}
+		if err != nil {
+			return uuid.Nil, err
+		}
+
+		err := stream.Send(&pb.FileChunk{
+			Meta: nil,
+			Data: data[:n],
+		})
+		if err != nil {
+			return uuid.Nil, err
+		}
+	}
+	id, err := stream.CloseAndRecv()
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uuid.FromBytes(id.Value)
+}
+
+func (s *ResourceService) GetFile(ctx context.Context, id api.ResourceId) (string, error) {
+	stream, err := s.resourceClient.GetFile(ctx, &pb.UUID{Value: id[:]})
+	if err != nil {
+		return "", err
+	}
+	path := s.fileStorePath + "/" + id.String()
+
+	file, err := os.Create(path)
+	if err != nil {
+		return "", nil
+	}
+	writer := bufio.NewWriter(file)
+	defer file.Close()
+	defer writer.Flush()
+
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		_, err = writer.Write(chunk.Data)
+		if err != nil {
+			return "", err
+		}
+	}
 }

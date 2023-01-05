@@ -51,7 +51,7 @@ func main() {
 	}(con)
 
 	authService = services.NewAuthService(pb.NewAuthClient(con), tokenService)
-	resourceService = services.NewResourceService(pb.NewResourcesClient(con))
+	resourceService = services.NewResourceService(pb.NewResourcesClient(con), os.TempDir())
 
 	loop(loginRegisterInitMsg, initAuth)
 	infinityLoop(saveInitMsg, processUI)
@@ -134,16 +134,33 @@ func processUI(input string) (string, error) {
 
 	case "get":
 		return handleGet(args)
+
+	case "getf":
+		return handleGetFile(args)
 	}
 	return "", errors.New("bad args")
+}
+
+func handleGetFile(args []string) (string, error) {
+	id, err := uuid.Parse(args[0])
+	if err != nil {
+		return "", err
+	}
+	path, err := resourceService.GetFile(context.Background(), id)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("saved to: %v", path), nil
 }
 
 var saveInitMsg = `
 save lp - save login password
 save bc - save bank card
+save fl - save file
 del [id] - delete by id
 list [type:1,2,3] - 1 - LoginPassword, 2 - File, 3 - BankCard 
-get [id] - get data by id
+get [id] - get loginPassword or BankCard by id
+getf [id] - get file
 `
 
 func handleGet(args []string) (string, error) {
@@ -193,9 +210,6 @@ func handleDelete(args []string) (string, error) {
 }
 
 func handleSave(args []string) (string, error) {
-	if args[0] != "lp" && args[0] != "bc" {
-		return "", errors.New("bad args")
-	}
 	var resource any
 	var meta string
 	var rType api.ResourceType
@@ -208,6 +222,12 @@ func handleSave(args []string) (string, error) {
 	case "bc":
 		resource, meta = readBankCard()
 		rType = api.BankCard
+
+	case "fl":
+		return readAndSaveFile()
+
+	default:
+		return "", errors.New("bad args")
 	}
 
 	resourceJson, err := json.Marshal(resource)
@@ -220,6 +240,16 @@ func handleSave(args []string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("saved successfully, id: %v", id), nil
+}
+
+func readAndSaveFile() (string, error) {
+	path := readString("file path")
+	description := readString("description")
+	id, err := resourceService.SaveFile(context.Background(), description, path)
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
 func readLoginPassword() (*model.LoginPassword, string) {

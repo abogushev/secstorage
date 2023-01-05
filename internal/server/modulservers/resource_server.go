@@ -1,19 +1,24 @@
 package modulservers
 
 import (
+	"bufio"
 	"context"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"io"
 	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
+	"secstorage/internal/server/services"
 	"secstorage/internal/server/storage/resource/model"
 )
 
 type ResourceService interface {
-	Save(context.Context, *model.Resource) (api.ResourceId, error)
+	Save(context.Context, *model.Resource) error
 	Delete(context.Context, api.ResourceId) error
 	ListByUserId(context.Context, api.UserId, api.ResourceType) ([]model.ShortResourceInfo, error)
 	Get(context.Context, api.ResourceId) (*model.Resource, error)
+	SaveFile(ctx context.Context, userId api.UserId, meta []byte) (api.ResourceId, *bufio.Writer, services.Close, error)
+	GetFile(ctx context.Context, id api.ResourceId) (*bufio.Reader, []byte, services.Close, error)
 }
 
 type ResourceServer struct {
@@ -28,7 +33,9 @@ func NewResourcesServer(service ResourceService) *ResourceServer {
 }
 
 func (s *ResourceServer) Save(ctx context.Context, resource *pb.Resource) (*pb.UUID, error) {
-	id, err := s.service.Save(ctx, &model.Resource{
+	id := uuid.New()
+	err := s.service.Save(ctx, &model.Resource{
+		Id:     id,
 		UserId: extractUserId(ctx),
 		Type:   api.ResourceType(resource.Type),
 		Data:   resource.Data,
@@ -83,4 +90,74 @@ func (s *ResourceServer) Get(ctx context.Context, id *pb.UUID) (*pb.Resource, er
 		Data: result.Data,
 		Meta: result.Meta,
 	}, nil
+}
+
+func (s *ResourceServer) SaveFile(stream pb.Resources_SaveFileServer) error {
+	var writer io.Writer
+	var closeWriter services.Close
+	defer closeWriter()
+
+	var id *pb.UUID
+	for {
+		chunk, err := stream.Recv()
+
+		if err == io.EOF {
+			return stream.SendAndClose(id)
+		}
+		if err != nil {
+			return err
+		}
+		if writer == nil {
+			var rId api.ResourceId
+			rId, writer, closeWriter, err = s.service.SaveFile(stream.Context(), extractUserId(stream.Context()), chunk.Meta)
+			id = &pb.UUID{Value: rId[:]}
+			if err != nil {
+				return err
+			}
+		}
+		_, err = writer.Write(chunk.Data)
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func (s *ResourceServer) GetFile(id *pb.UUID, stream pb.Resources_GetFileServer) error {
+	rId, err := uuid.FromBytes(id.Value)
+	if err != nil {
+		return err
+	}
+	reader, meta, closeReader, err := s.service.GetFile(stream.Context(), rId)
+	if err != nil {
+		return err
+	}
+	defer closeReader()
+	err = stream.Send(&pb.FileChunk{
+		Meta: meta,
+		Data: nil,
+	})
+	if err != nil {
+		return err
+	}
+
+	buffer := make([]byte, 4096)
+	n := 0
+
+	for {
+		n, err = reader.Read(buffer)
+		if err == io.EOF || n == 0 {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		err = stream.Send(&pb.FileChunk{
+			Meta: nil,
+			Data: buffer[:n],
+		})
+		if err != nil {
+			return err
+		}
+	}
 }

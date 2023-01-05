@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
@@ -46,7 +47,7 @@ func initServerAndClient(db *sqlx.DB) {
 	authServer := modulservers.NewAuthServer(authService, TokenService)
 
 	resourceStore := resourceStorage.NewStore(context.Background(), db)
-	resourceService := services.NewResourceStoreService(resourceStore)
+	resourceService := services.NewResourceStoreService(resourceStore, "./")
 	resourceServer := modulservers.NewResourcesServer(resourceService)
 
 	go Run(context.Background(), authServer, resourceServer, TokenService, insecure.NewCredentials(), lis)
@@ -203,4 +204,37 @@ func TestResourceServer_List_And_Delete_Success(t *testing.T) {
 	err = db.GetContext(ctx, &c, "select count(*) from resources where id = $1", rId1)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, c)
+}
+
+func TestResourceServer_SaveFile(t *testing.T) {
+	prepare()
+	token, err := authClient.Register(context.Background(), testAuthData)
+	assert.NoError(t, err)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.New(map[string]string{"token": token.Token}))
+	stream, err := resourceClient.SaveFile(ctx)
+	assert.NoError(t, err)
+	err = stream.Send(&pb.FileChunk{
+		Meta: []byte("meta"),
+		Data: nil,
+	})
+
+	assert.NoError(t, err)
+
+	err = stream.Send(&pb.FileChunk{
+		Meta: []byte("meta"),
+		Data: []byte("data"),
+	})
+
+	assert.NoError(t, err)
+	err = stream.Send(&pb.FileChunk{
+		Meta: []byte("meta"),
+		Data: []byte("continue"),
+	})
+
+	assert.NoError(t, err)
+
+	id, err := stream.CloseAndRecv()
+	assert.NoError(t, err)
+	fmt.Println(string(id.Value))
 }

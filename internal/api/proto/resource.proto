@@ -32,9 +32,16 @@ message ShortResourceInfo {
   bytes meta = 2;
 }
 
+message FileChunk {
+  bytes meta = 1;
+  bytes data = 2;
+}
+
 service Resources {
   rpc Save(Resource) returns (UUID);
   rpc Delete(UUID) returns (google.protobuf.Empty);
   rpc ListByUserId(Query) returns (stream ShortResourceInfo);
   rpc Get(UUID) returns (Resource);
+  rpc SaveFile(stream FileChunk) returns (UUID);
+  rpc GetFile(UUID) returns (stream FileChunk);
 }

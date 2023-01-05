@@ -48,17 +48,18 @@ func main() {
 	authServer := modulservers.NewAuthServer(authService, tokenService)
 
 	resourceStore := resourceStorage.NewStore(context.Background(), db)
-	resourceService := services.NewResourceStoreService(resourceStore)
+	resourceService := services.NewResourceStoreService(resourceStore, config.FileStorePath)
 	resourceServer := modulservers.NewResourcesServer(resourceService)
 
 	server.Run(context.Background(), authServer, resourceServer, tokenService, creds, listen)
 }
 
 type Config struct {
-	DBURL       string `json:"dburl"`
-	Key         string `json:"key"`
-	UseSecCreds bool   `json:"use_sec_creds"`
-	Port        int    `json:"port"`
+	DBURL         string `json:"dburl"`
+	Key           string `json:"key"`
+	UseSecCreds   bool   `json:"use_sec_creds"`
+	Port          int    `json:"port"`
+	FileStorePath string `json:"file_store_path"`
 }
 
 func mustReadConfig() Config {
