@@ -64,7 +64,7 @@ func (s *ResourceService) SaveFile(ctx context.Context, userId api.UserId, meta 
 	resource := &model.Resource{
 		Id:     id,
 		UserId: userId,
-		Type:   2,
+		Type:   api.File,
 		Data:   []byte(path),
 		Meta:   meta,
 	}
