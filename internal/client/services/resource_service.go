@@ -1,16 +1,15 @@
 package services
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"io"
-	"os"
 	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
 	"secstorage/internal/client/model"
+	"secstorage/internal/fileutil"
 )
 
 type ResourceService struct {
@@ -95,16 +94,6 @@ func (s *ResourceService) SaveFile(ctx context.Context, description, path string
 	if err != nil {
 		return uuid.Nil, err
 	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	defer file.Close()
-	reader := bufio.NewReader(file)
-	data := make([]byte, 4096)
-	n := 0
-
 	err = stream.Send(&pb.FileChunk{
 		Meta: []byte(description),
 		Data: nil,
@@ -112,23 +101,14 @@ func (s *ResourceService) SaveFile(ctx context.Context, description, path string
 	if err != nil {
 		return uuid.Nil, err
 	}
-
-	for {
-		n, err = reader.Read(data)
-		if err == io.EOF || n == 0 {
-			break
-		}
-		if err != nil {
-			return uuid.Nil, err
-		}
-
-		err := stream.Send(&pb.FileChunk{
+	err = fileutil.Send(path, func(bytes []byte) error {
+		return stream.Send(&pb.FileChunk{
 			Meta: nil,
-			Data: data[:n],
+			Data: bytes,
 		})
-		if err != nil {
-			return uuid.Nil, err
-		}
+	})
+	if err != nil {
+		return uuid.Nil, err
 	}
 	id, err := stream.CloseAndRecv()
 	if err != nil {
@@ -142,27 +122,14 @@ func (s *ResourceService) GetFile(ctx context.Context, id api.ResourceId) (strin
 	if err != nil {
 		return "", err
 	}
+
 	path := s.fileStorePath + "/" + id.String()
-
-	file, err := os.Create(path)
-	if err != nil {
-		return "", nil
-	}
-	writer := bufio.NewWriter(file)
-	defer file.Close()
-	defer writer.Flush()
-
-	for {
+	err = fileutil.Get(path, func() ([]byte, error) {
 		chunk, err := stream.Recv()
-		if err == io.EOF {
-			return path, nil
-		}
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		_, err = writer.Write(chunk.Data)
-		if err != nil {
-			return "", err
-		}
-	}
+		return chunk.Data, nil
+	})
+	return path, err
 }

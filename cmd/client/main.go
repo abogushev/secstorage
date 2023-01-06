@@ -114,10 +114,10 @@ func infinityLoop(initMsg string, handler func(string) (string, error)) {
 		}
 		result, err := handler(cmd)
 		if err != nil {
-			clear(fmt.Sprintf("ERR: %v\n%v", err.Error(), initMsg))
+			clear(fmt.Sprintf("ERR:\n%v\n%v", err.Error(), initMsg))
 			continue
 		}
-		clear(fmt.Sprintf("OK: %v\n%v", result, initMsg))
+		clear(fmt.Sprintf("OK:\n%v\n%v", result, initMsg))
 	}
 }
 
@@ -194,7 +194,7 @@ func handleList(args []string) (string, error) {
 	}
 	var writer strings.Builder
 	for i := 0; i < len(shortInfos); i++ {
-		_, err := writer.WriteString(fmt.Sprintf("id: %v - %v", shortInfos[i].Id, shortInfos[i].Meta))
+		_, err := writer.WriteString(fmt.Sprintf("id: %v - %v\n", shortInfos[i].Id, shortInfos[i].Meta))
 		if err != nil {
 			return "", err
 		}

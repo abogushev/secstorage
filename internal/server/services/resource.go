@@ -1,11 +1,11 @@
 package services
 
 import (
-	"bufio"
 	"context"
 	"github.com/google/uuid"
 	"os"
 	"secstorage/internal/api"
+	"secstorage/internal/fileutil"
 	"secstorage/internal/server/storage/resource/model"
 )
 
@@ -47,8 +47,8 @@ func (s *ResourceService) ListByUserId(ctx context.Context, userId api.UserId, r
 	return s.store.ListByUserId(ctx, userId, resourceType)
 }
 
-func (s *ResourceService) Get(ctx context.Context, resourceId api.ResourceId, userId api.UserId) (*model.Resource, error) {
-	return s.store.Get(ctx, resourceId, api.Undefined, userId)
+func (s *ResourceService) Get(ctx context.Context, resourceId api.ResourceId, userId api.UserId, rType api.ResourceType) (*model.Resource, error) {
+	return s.store.Get(ctx, resourceId, rType, userId)
 }
 
 type Close func()
@@ -56,7 +56,8 @@ type Close func()
 func (s *ResourceService) createFilePath(id api.ResourceId) string {
 	return s.fileStorePath + "/" + id.String()
 }
-func (s *ResourceService) SaveFile(ctx context.Context, userId api.UserId, meta []byte) (api.ResourceId, *bufio.Writer, Close, error) {
+
+func (s *ResourceService) SaveFile(ctx context.Context, userId api.UserId, meta []byte, chunkReceiver func() ([]byte, error)) (api.ResourceId, error) {
 	id := uuid.New()
 	path := s.createFilePath(id)
 
@@ -71,26 +72,12 @@ func (s *ResourceService) SaveFile(ctx context.Context, userId api.UserId, meta 
 	err := s.store.Save(ctx, resource)
 
 	if err != nil {
-		return uuid.Nil, nil, nil, err
+		return uuid.Nil, err
 	}
-	file, err := os.Create(path)
-	if err != nil {
-		return uuid.Nil, nil, nil, err
-	}
-	writer := bufio.NewWriter(file)
-	return id, writer, func() { writer.Flush(); file.Close() }, nil
+
+	return id, fileutil.Get(path, chunkReceiver)
 }
 
-func (s *ResourceService) GetFile(ctx context.Context, id api.ResourceId, userId api.UserId) (*bufio.Reader, []byte, Close, error) {
-	resource, err := s.store.Get(ctx, id, api.File, userId)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	path := string(resource.Data)
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	reader := bufio.NewReader(file)
-	return reader, resource.Meta, func() { file.Close() }, nil
+func (s *ResourceService) GetFile(resource *model.Resource, chunkSender func([]byte) error) error {
+	return fileutil.Send(string(resource.Data), chunkSender)
 }

@@ -1,14 +1,13 @@
 package modulservers
 
 import (
-	"bufio"
 	"context"
+	"errors"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
-	"secstorage/internal/server/services"
 	"secstorage/internal/server/storage/resource/model"
 )
 
@@ -16,9 +15,9 @@ type ResourceService interface {
 	Save(context.Context, *model.Resource) error
 	Delete(context.Context, api.ResourceId, api.UserId) error
 	ListByUserId(context.Context, api.UserId, api.ResourceType) ([]model.ShortResourceInfo, error)
-	Get(context.Context, api.ResourceId, api.UserId) (*model.Resource, error)
-	SaveFile(context.Context, api.UserId, []byte) (api.ResourceId, *bufio.Writer, services.Close, error)
-	GetFile(context.Context, api.ResourceId, api.UserId) (*bufio.Reader, []byte, services.Close, error)
+	Get(context.Context, api.ResourceId, api.UserId, api.ResourceType) (*model.Resource, error)
+	SaveFile(context.Context, api.UserId, []byte, func() ([]byte, error)) (api.ResourceId, error)
+	GetFile(resource *model.Resource, chunkSender func([]byte) error) error
 }
 
 type ResourceServer struct {
@@ -81,7 +80,7 @@ func (s *ResourceServer) Get(ctx context.Context, id *pb.UUID) (*pb.Resource, er
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.service.Get(ctx, rId, extractUserId(ctx))
+	result, err := s.service.Get(ctx, rId, extractUserId(ctx), api.Undefined)
 	if err != nil {
 		return nil, err
 	}
@@ -93,33 +92,33 @@ func (s *ResourceServer) Get(ctx context.Context, id *pb.UUID) (*pb.Resource, er
 }
 
 func (s *ResourceServer) SaveFile(stream pb.Resources_SaveFileServer) error {
-	var writer io.Writer
-	var closeWriter services.Close
-	defer closeWriter()
-
-	var id *pb.UUID
-	for {
-		chunk, err := stream.Recv()
-
-		if err == io.EOF {
-			return stream.SendAndClose(id)
-		}
-		if err != nil {
-			return err
-		}
-		if writer == nil {
-			var rId api.ResourceId
-			rId, writer, closeWriter, err = s.service.SaveFile(stream.Context(), extractUserId(stream.Context()), chunk.Meta)
-			id = &pb.UUID{Value: rId[:]}
-			if err != nil {
-				return err
-			}
-		}
-		_, err = writer.Write(chunk.Data)
-		if err != nil {
-			return err
-		}
+	chunk, err := stream.Recv()
+	if err == io.EOF {
+		return errors.New("empty file stream")
 	}
+	if err != nil {
+		return err
+	}
+
+	rId, err := s.service.SaveFile(
+		stream.Context(),
+		extractUserId(stream.Context()),
+		chunk.Meta,
+		func() ([]byte, error) {
+			chunk, err := stream.Recv()
+			if err != nil {
+				return nil, err
+			}
+			return chunk.Data, nil
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	id := &pb.UUID{Value: rId[:]}
+
+	return stream.SendAndClose(id)
 }
 
 func (s *ResourceServer) GetFile(id *pb.UUID, stream pb.Resources_GetFileServer) error {
@@ -127,37 +126,25 @@ func (s *ResourceServer) GetFile(id *pb.UUID, stream pb.Resources_GetFileServer)
 	if err != nil {
 		return err
 	}
-	reader, meta, closeReader, err := s.service.GetFile(stream.Context(), rId, extractUserId(stream.Context()))
+
+	resource, err := s.service.Get(stream.Context(), rId, extractUserId(stream.Context()), api.File)
 	if err != nil {
 		return err
 	}
-	defer closeReader()
 	err = stream.Send(&pb.FileChunk{
-		Meta: meta,
+		Meta: resource.Meta,
 		Data: nil,
 	})
 	if err != nil {
 		return err
 	}
-
-	buffer := make([]byte, 4096)
-	n := 0
-
-	for {
-		n, err = reader.Read(buffer)
-		if err == io.EOF || n == 0 {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		err = stream.Send(&pb.FileChunk{
-			Meta: nil,
-			Data: buffer[:n],
-		})
-		if err != nil {
-			return err
-		}
-	}
+	return s.service.GetFile(
+		resource,
+		func(bytes []byte) error {
+			return stream.Send(&pb.FileChunk{
+				Meta: nil,
+				Data: bytes,
+			})
+		},
+	)
 }
