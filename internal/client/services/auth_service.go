@@ -41,7 +41,7 @@ func (s *AuthService) Register(ctx context.Context, login, password string) (*pb
 	}
 	s.tokenService.Set(tokenData.Token)
 
-	go s.refreshToken(login, password)
+	go s.refreshToken(login, password, tokenData.ExpireAt.AsTime())
 
 	return tokenData, nil
 }
@@ -62,27 +62,35 @@ func (s *AuthService) Login(ctx context.Context, login, password string) (*pb.To
 
 	s.tokenService.Set(tokenData.Token)
 
-	go s.refreshToken(login, password)
+	go s.refreshToken(login, password, tokenData.ExpireAt.AsTime())
 
 	return tokenData, nil
 }
 
-func (s *AuthService) refreshToken(login, password string) {
+func (s *AuthService) refreshToken(login, password string, expiredAt time.Time) {
+	calcRefreshTime := func(expiredAt time.Time) time.Duration {
+		return expiredAt.Sub(time.Now().UTC()) / 2
+	}
+
 	s.refreshTokenOnce.Do(func() {
-		ticker := time.NewTicker(10 * time.Minute)
+		timer := time.NewTimer(calcRefreshTime(expiredAt))
 		for {
 			select {
 			case <-context.Background().Done():
 				Log.Info("refresh token canceled")
+				timer.Stop()
 				return
-			case <-ticker.C:
+
+			case <-timer.C:
 				Log.Info("start refreshing token...")
 				token, err := s.Login(context.Background(), login, password)
 				if err != nil {
 					Log.Error("failed to refresh token", zap.Error(err))
+					timer.Reset(2 * time.Second)
 				} else {
 					s.tokenService.Set(token.Token)
 					Log.Info("token refreshed successful")
+					timer.Reset(calcRefreshTime(token.ExpireAt.AsTime()))
 				}
 			}
 		}
