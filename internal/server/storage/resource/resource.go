@@ -55,12 +55,7 @@ func (s *Storage) ListByUserId(ctx context.Context, userId api.UserId, resourceT
 
 func (s *Storage) Get(ctx context.Context, resourceId api.ResourceId, resourceType api.ResourceType, userId api.UserId) (*model.Resource, error) {
 	var result model.Resource
-	var err error
-	if resourceType == 0 {
-		err = s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1 and user_id = $2", resourceId, userId)
-	} else {
-		err = s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1 and type = $2 and user_id = $3", resourceId, resourceType, userId)
-	}
+	err := s.db.GetContext(ctx, &result, "select id, user_id, type, data, meta from resources where id = $1 and type = $2 and user_id = $3", resourceId, resourceType, userId)
 	return &result, err
 }
 

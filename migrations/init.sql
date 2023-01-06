@@ -7,7 +7,7 @@ create table users(
 create table resources(
   id uuid primary key,
   user_id uuid,
-  type int not null,
+  type int default 0,
   data bytea,
   meta bytea,
 

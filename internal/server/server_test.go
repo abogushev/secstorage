@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ import (
 	"secstorage/internal/api"
 	pb "secstorage/internal/api/proto"
 	"secstorage/internal/server/modulservers"
-	services "secstorage/internal/server/services"
+	"secstorage/internal/server/services"
 	"secstorage/internal/server/storage"
 	authStorage "secstorage/internal/server/storage/auth"
 	resourceStorage "secstorage/internal/server/storage/resource"
@@ -206,35 +205,55 @@ func TestResourceServer_List_And_Delete_Success(t *testing.T) {
 	assert.Equal(t, 0, c)
 }
 
-func TestResourceServer_SaveFile(t *testing.T) {
+func TestResourceServer_SaveAndGetAndDeleteFile(t *testing.T) {
 	prepare()
 	token, err := authClient.Register(context.Background(), testAuthData)
 	assert.NoError(t, err)
 
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.New(map[string]string{"token": token.Token}))
-	stream, err := resourceClient.SaveFile(ctx)
+	sendStream, err := resourceClient.SaveFile(ctx)
 	assert.NoError(t, err)
-	err = stream.Send(&pb.FileChunk{
+	err = sendStream.Send(&pb.FileChunk{
 		Meta: []byte("meta"),
 		Data: nil,
 	})
 
 	assert.NoError(t, err)
 
-	err = stream.Send(&pb.FileChunk{
+	err = sendStream.Send(&pb.FileChunk{
 		Meta: []byte("meta"),
-		Data: []byte("data"),
+		Data: []byte("data_p1"),
 	})
 
 	assert.NoError(t, err)
-	err = stream.Send(&pb.FileChunk{
+	err = sendStream.Send(&pb.FileChunk{
 		Meta: []byte("meta"),
-		Data: []byte("continue"),
+		Data: []byte("data_p2"),
 	})
 
 	assert.NoError(t, err)
 
-	id, err := stream.CloseAndRecv()
+	id, err := sendStream.CloseAndRecv()
 	assert.NoError(t, err)
-	fmt.Println(string(id.Value))
+
+	getStream, err := resourceClient.GetFile(ctx, id)
+	assert.NoError(t, err)
+	received := make([]byte, 0)
+	for {
+		chunk, err := getStream.Recv()
+		if err == io.EOF {
+			break
+		}
+		assert.NoError(t, err)
+		received = append(received, chunk.Data...)
+	}
+	assert.Equal(t, string(received), "data_p1data_p2")
+
+	_, err = resourceClient.Delete(ctx, id)
+	assert.NoError(t, err)
+
+	getStream, err = resourceClient.GetFile(ctx, id)
+	assert.NoError(t, err)
+	_, err = getStream.Recv()
+	assert.Error(t, err)
 }
