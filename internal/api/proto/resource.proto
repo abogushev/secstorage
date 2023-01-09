@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package secstorage;
+
+option go_package = "secstorage/internal/api/proto";
+
+import "google/protobuf/empty.proto";
+
+enum TYPE {
+    UNDEFINED = 0;
+    LOGIN_PASSWORD = 1;
+    FILE = 2;
+    BANK_CARD = 3;
+}
+
+message Resource {
+  TYPE type = 1;
+  bytes data = 2;
+  bytes meta = 3;
+}
+
+message UUID {
+  bytes value = 1;
+}
+
+message Query {
+  TYPE resourceType = 1;
+}
+
+message ShortResourceInfo {
+  UUID id = 1;
+  bytes meta = 2;
+}
+
+message FileChunk {
+  bytes meta = 1;
+  bytes data = 2;
+}
+
+service Resources {
+  rpc Save(Resource) returns (UUID);
+  rpc Delete(UUID) returns (google.protobuf.Empty);
+  rpc ListByUserId(Query) returns (stream ShortResourceInfo);
+  rpc Get(UUID) returns (Resource);
+  rpc SaveFile(stream FileChunk) returns (UUID);
+  rpc GetFile(UUID) returns (stream FileChunk);
+}
